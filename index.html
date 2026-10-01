@@ -202,6 +202,7 @@
 <div id="modalSeleccionRango">
     <div class="modal-rango-dialogo">
         <p style="font-weight:700; font-size:1.1em;">Selecciona punto de corte</p>
+        <button class="btn-modal-corte" onclick="cambiarRangoPorcentaje(16)" style="background:#ff6600;">16</button>
         <button class="btn-modal-corte" onclick="cambiarRangoPorcentaje(17)">17</button>
         <button class="btn-modal-corte" onclick="cambiarRangoPorcentaje(18)">18</button>
         <button class="btn-modal-corte" onclick="cambiarRangoPorcentaje(19)">19</button>
@@ -235,7 +236,7 @@
           <div id="hora-sardina"></div>
         </div>
         <br />
-        <label for="duenoEmbarcacion">Dueño y Embarcación:</label> <input type="text" id="duenoEmbarcacion" name="duenoEmbarcacion" list="listaDuenoEmbarcacion" style="width: 300px;" /> <datalist id="listaDuenoEmbarcacion"></datalist>
+        <label for="duenoEmbarcacion">Dueño y Embarcación:</label> <input type="text" id="duenoEmbarcacion" name="duenoEmbarcacion" list="listaDuenoEmbarcacion" style="width: 300px;" autocomplete="off" /> <datalist id="listaDuenoEmbarcacion"></datalist>
         <label for="responsableMuestreo">Responsable del Muestreo:</label>
         <div style="position:relative;display:inline-block;width:300px">
           <input type="text" id="responsableMuestreo" name="responsableMuestreo" style="width: 300px;" readonly autocomplete="off" />
@@ -366,6 +367,16 @@
 </div>
 
 <script>
+    // ========== UTILIDAD: NORMALIZAR TEXTO (sin tildes, minúsculas) ==========
+    function normalizarTexto(texto) {
+        if (!texto) return '';
+        return texto
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    }
+
     // ========== DATOS POR PUERTO ==========
 const PUERTO_OPCIONES = {
     "El Morro": {
@@ -1080,6 +1091,11 @@ btnLimpiar.onclick = function() {
 
 // ========== RANGO DINÁMICO "PORCENTAJE DEL MUESTREO" ==========
 const RANGOS_DISPONIBLES = {
+    16: {
+        nombreMenor: '(<16)', nombreMayor: '(≥16)',
+        menor: ["12","12.5","13","13.5","14","14.5","15","15.5"],
+        mayor: ["16","16.5","17","17.5","18","18.5","19","19.5","20","20.5","21","21.5","22","22.5","23"]
+    },
     17: {
         nombreMenor: '(<17)', nombreMayor: '(≥17)',
         menor: ["12","12.5","13","13.5","14","14.5","15","15.5","16","16.5"],
@@ -1106,6 +1122,13 @@ document.getElementById('btnRangoMenor').onclick = document.getElementById('btnR
     document.getElementById('modalSeleccionRango').style.display = 'flex';
 };
 const TEMAS = {
+    16: { // Rango 16: Naranja intenso (alarmante)
+        header: 'radial-gradient(ellipse at center, #fff3e6 0%, #ff9933 40%, #ff6600 65%, #cc4400 100%)',
+        btn: '#ff9933',
+        btnHover: '#ff6600',
+        boton: 'radial-gradient(ellipse at center, #fff3e6 0%, #ff9933 65%, #ff6600 100%)',
+        blackbotton: '#cc4400'
+    },
     17: { // Rango 17: Rojo
         header: 'radial-gradient(ellipse at center, #ffe6e6 0%, #ff7f7f 40%, #ff0000 65%, red 100%)',
         btn: '#ff7f7f',
@@ -1537,6 +1560,90 @@ window.graficaTallaTipo = new Chart(document.getElementById('grafica-tipos-talla
   }
 </script>
 
+<script>
+// ========== BÚSQUEDA SIN TILDES EN DUEÑO Y EMBARCACIÓN ==========
+(function() {
+    const inputDueno = document.getElementById('duenoEmbarcacion');
+    const datalistOriginal = document.getElementById('listaDuenoEmbarcacion');
+    
+    // Crear datalist alternativo para búsquedas normalizadas
+    let datalistNormalizado = document.createElement('datalist');
+    datalistNormalizado.id = 'listaDuenoEmbarcacionNormalizado';
+    document.body.appendChild(datalistNormalizado);
+    
+    // Mapeo de texto normalizado a texto original
+    let mapaNormalizado = {};
+    
+    function actualizarMapaBusqueda() {
+        mapaNormalizado = {};
+        datalistNormalizado.innerHTML = '';
+        const opciones = datalistOriginal.querySelectorAll('option');
+        opciones.forEach(function(opt) {
+            const original = opt.value;
+            const normalizado = normalizarTexto(original);
+            mapaNormalizado[normalizado] = original;
+            
+            // Crear opción normalizada para el datalist alternativo
+            const optNorm = document.createElement('option');
+            optNorm.value = original; // Mostramos el original pero buscamos por normalizado
+            datalistNormalizado.appendChild(optNorm);
+        });
+    }
+    
+    // Observar cambios en el datalist original
+    const observer = new MutationObserver(actualizarMapaBusqueda);
+    observer.observe(datalistOriginal, { childList: true });
+    
+    // Actualizar inicialmente
+    actualizarMapaBusqueda();
+    
+    // Interceptar la entrada del usuario
+    inputDueno.addEventListener('input', function(e) {
+        const valorInput = normalizarTexto(this.value);
+        if (!valorInput) return;
+        
+        // Buscar coincidencias parciales en el mapa normalizado
+        const coincidencias = [];
+        for (let normalizado in mapaNormalizado) {
+            if (normalizado.includes(valorInput)) {
+                coincidencias.push(mapaNormalizado[normalizado]);
+            }
+        }
+        
+        // Si hay coincidencias, actualizar el datalist visible temporalmente
+        if (coincidencias.length > 0 && coincidencias.length < datalistOriginal.querySelectorAll('option').length) {
+            // Crear datalist temporal con las coincidencias
+            let datalistTemp = document.getElementById('listaDuenoEmbarcacionTemp');
+            if (!datalistTemp) {
+                datalistTemp = document.createElement('datalist');
+                datalistTemp.id = 'listaDuenoEmbarcacionTemp';
+                document.body.appendChild(datalistTemp);
+            }
+            datalistTemp.innerHTML = '';
+            coincidencias.forEach(function(coinc) {
+                const opt = document.createElement('option');
+                opt.value = coinc;
+                datalistTemp.appendChild(opt);
+            });
+            inputDueno.setAttribute('list', 'listaDuenoEmbarcacionTemp');
+        } else {
+            inputDueno.setAttribute('list', 'listaDuenoEmbarcacion');
+        }
+    });
+    
+    // Al seleccionar una opción, restaurar el datalist original
+    inputDueno.addEventListener('change', function() {
+        inputDueno.setAttribute('list', 'listaDuenoEmbarcacion');
+    });
+    
+    // También al perder el foco
+    inputDueno.addEventListener('blur', function() {
+        setTimeout(function() {
+            inputDueno.setAttribute('list', 'listaDuenoEmbarcacion');
+        }, 200);
+    });
+})();
+</script>
 
 </body>
 </html>
